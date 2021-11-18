@@ -11,6 +11,7 @@ library(astsa)
 library(forecast)
 library(xts)
 library(TSA)
+library(dplyr)
 
 pgram = function(x){
   m = floor(length(x)/2)
@@ -150,11 +151,35 @@ modelf1 = sarima.for(ddpop.ts,n.ahead = 12,p=3,d=0,q=7,P=0,D=0,Q=2,S=12)
 ```
 # Model 2
 ```{r}
-plot.ts(dpop)
+library(lubridate)
 
+popdata$date = date
+popdata$pop = popdata$POPTHM
+popdata$month = 
+popdata$dpop = c(0, dpop)
+popdata = popdata[c("date", "month", "pop", "dpop")]
 ```
 ```{r}
-pop
+month = month(popdata$date)[2:length(popdata$date)]
+t = 1:length(dpop)
+model = lm(dpop ~ poly(t, degree = 5)*month)
+```
+```{r}
+plot(t, model$fitted.values, type = "l")
+lines(t, dpop, col = "blue")
+plot(t, model$residuals, type = "l")
+
+```
+
+```{r}
+d9d12 = diff(diff(dpop, 12), 9)
+plot.ts(d9d12)
+```
+```{r}
+acf2(d9d12)
+```
+```{r}
+
 ```
 
 
