@@ -7,29 +7,43 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(astsa)
+library(forecast)
+library(xts)
+library(TSA)
+
+pgram = function(x){
+  m = floor(length(x)/2)
+  pgram = abs(fft(x)[2:(m+1)])^2/length(x)
+  plot(pgram[1:30], type = "h")
+  abline(h=0)
+  return(pgram)
+}
 ```
 
 ## 1.Exploratory data analysis
-### 1a
 ```{r cars}
 rm(list = ls())
 popdata = read.csv("POPTHM1.csv",header = T)
 
 pop = popdata$POPTHM
 date = as.Date(popdata$DATE,format = "%Y/%m/%d")
-plot(pop)
 
 pop.ts = ts(pop,start = c(1990,3),frequency =  12)
 plot.ts(pop.ts,type = "l", xlab = "Monthly", ylab = "USA population data", main = "USA population for years 1990-2021") 
 
 ```
-```{r smooth, echo=FALSE}
+increasing trend
 
+```{r smooth, echo=FALSE}
 # Step1:  1st difference
 dpop = diff(pop.ts)
 t = c(1:length(dpop))
 plot(t,dpop,type = "l")
+```
 
+
+```{r smooth, echo=FALSE}
 # Step 2:  fit the trend
 lm1 = lm(dpop~poly(t,4))  
 dpop_lm1_fit=lm1$fitted.values
@@ -42,7 +56,10 @@ plot(dpop_lm1_res,type = 'l')
 #待做：对于数据过拟合进行惩罚 AIC
 
 ```
-
+```{r}
+pgram(dpop_lm1_res[1:324])
+```
+so the period are 324 / 3 = 108 and 324 / 27 = 12
 
 ```{r smooth, echo=FALSE}
 
@@ -92,7 +109,7 @@ for(PP in c(0:3))
 ```
 
 ```{r pressure, echo=FALSE}
-m1 = sarima(ddpop.ts,p=3,d=0,q=7,P=0,D=0,Q=1,S=12)
+m1 = sarima(ddpop.ts,p=3,d=0,q=7,P=0,D=0,Q=1,S=12) 
 m2 = sarima(ddpop.ts,p=3,d=0,q=7,P=0,D=0,Q=2,S=12)
 m3 = sarima(ddpop.ts,p=3,d=0,q=7,P=0,D=0,Q=3,S=12)
 #m2 fits best if we look at the LjungBox test and p-value#
@@ -131,67 +148,13 @@ all.plot(as.vector(ddpop.ts),corrs,par.corrs)
 modelf1 = sarima.for(ddpop.ts,n.ahead = 12,p=3,d=0,q=7,P=0,D=0,Q=2,S=12)
 
 ```
+# Model 2
+```{r}
+plot.ts(dpop)
 
-
-```{r pressure, echo=FALSE}
-sm.par=c(0.5,1,1,1,1,1,1,1,1,1,1,1,0.5)
-mt = filter(dpop, sm.par/12)
-sm.res = dpop - mt
-plot(mt)
-lines(dpop,col = 'red')
-plot.ts(sm.res[7:350])
-
-acf2(sm.res[7:350])
-#auto.arima(sm.res)
-model1 = sarima(sm.res[7:350],p=4,d=0,q=1,S=12,P=1,D=1,Q=2)
 ```
-
-```{r 1c}
-
-library(astsa)
-acf2(ddpop,max.lag = 80)
-
-#library(forecast)
-#auto.arima(ddpop)
-
-for( pp in 1:11 ){
-  for (qq in 1:11)
-  model1 = sarima(ddpop,p=pp,d=0,q=qq, P = 1,D = 0, Q=1,no.constant=TRUE)
-}
-
-#model2 = sarima(ddpop,p=10,d=0,q=3,S=12,P=1,D=0,Q=2,no.constant=TRUE)
-model2 = arima(ddpop, order = c(2, 0, 0),seasonal = list(order = c(2,0,0)))
-plot.ts(model2$residuals)
-acf2(model2$residuals)
+```{r}
+pop
 ```
 
 
-## 1.Exploratory data analysis
-### 1a
-```{r cars}
-rm(list = ls())
-popdata = read.csv("/Users/li/Desktop/POPTHM/GOLDAMGBD228NLBM.csv",header = T)
-
-pop = popdata$GOLDAMGBD228NLBM
-date = as.Date(popdata$DATE,format = "%Y-%m-%d")
-library(xts)
-pop.ts = ts(pop,start = c(1983,3),frequency = 12)
-pop.xts <- xts(pop, order.by=date)
-plot.ts(pop.ts,type = "l", xlab ="Monthly") 
-
-```
-
-```{r pressure, echo=FALSE}
-l1 = log(pop.ts)
-dpop = diff(l1)
-plot.ts(dpop,type = "l", xlab = "Monthly", ylab = "1th difference")
-
-```
-
-```{r 1c}
-
-library(astsa)
-acf2(dpop,max.lag = 60)
-auto.arima(dpop)
-
-```
