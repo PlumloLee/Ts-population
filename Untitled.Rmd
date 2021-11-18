@@ -1,0 +1,197 @@
+---
+title: "Project"
+author: "Ziyuan Li"
+date: "11/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1.Exploratory data analysis
+### 1a
+```{r cars}
+rm(list = ls())
+popdata = read.csv("/Users/li/Desktop/POPTHM/POPTHM1.csv",header = T)
+
+pop = popdata$POPTHM
+date = as.Date(popdata$DATE,format = "%Y/%m/%d")
+plot(pop)
+
+pop.ts = ts(pop,start = c(1990,3),frequency =  12)
+plot.ts(pop.ts,type = "l", xlab = "Monthly", ylab = "USA population data", main = "USA population for years 1990-2021") 
+
+```
+```{r smooth, echo=FALSE}
+
+# Step1:  1st difference
+dpop = diff(pop.ts)
+t = c(1:length(dpop))
+plot(t,dpop,type = "l")
+
+# Step 2:  fit the trend
+lm1 = lm(dpop~poly(t,4))  
+dpop_lm1_fit=lm1$fitted.values
+
+plot(t,as.numeric(dpop),type = 'l')
+lines(t,dpop_lm1_fit)
+dpop_lm1_res=lm1$residuals
+plot(dpop_lm1_res,type = 'l') 
+
+#待做：对于数据过拟合进行惩罚 AIC
+
+```
+
+
+```{r smooth, echo=FALSE}
+
+v1 = cos(2*pi*t/108)
+v2 = sin(2*pi*t/108)
+
+
+lm2 = lm(dpop_lm1_res~v1+v2)
+plot(t,as.numeric(dpop_lm1_res),type = 'l')
+lines(t,lm2$fitted.values)
+
+dpop_lm2_res= lm2$residuals
+plot(t,dpop_lm2_res,type = 'l')
+
+#检测平稳性
+
+
+
+```
+
+```{r pressure1, echo=FALSE}
+sm.par=c(0.5,1,1,1,1,1,1,1,1,1,1,1,0.5)
+mt = filter(dpop_lm2_res, sm.par/12)
+sm.res = dpop_lm2_res - mt
+plot(sm.res)
+
+plot(dpop_lm2_res,type ='l')
+lines(mt,col = 'red')
+
+```
+```{r pressure, echo=FALSE}
+ddpop = diff(dpop_lm2_res,12)
+plot.ts(ddpop,type = "l")
+
+ddpop.ts = ts(ddpop,start = '1991.3',frequency = 12)
+acf2(ddpop.ts,100)
+library(astsa)
+auto.arima(ddpop.ts)
+```
+```{r pressure3, echo=FALSE}
+
+for(PP in c(0:3))
+  for(QQ in c(0:3))
+    for (pp in c(1:4))
+      for(qq in c(0:7))
+        m4 = sarima(ddpop,p=pp,d=0,q=qq,P=PP,D=0,Q=QQ,S=12)
+```
+
+```{r pressure, echo=FALSE}
+m1 = sarima(ddpop.ts,p=3,d=0,q=7,P=0,D=0,Q=1,S=12)
+m2 = sarima(ddpop.ts,p=3,d=0,q=7,P=0,D=0,Q=2,S=12)
+m3 = sarima(ddpop.ts,p=3,d=0,q=7,P=0,D=0,Q=3,S=12)
+#m2 fits best if we look at the LjungBox test and p-value#
+```
+```{r pressure, echo=FALSE}
+m1$AIC
+m2$AIC
+m3$AIC
+
+m1$AICc
+m2$AICc
+m3$AICc
+
+m1$BIC
+m2$BIC
+m3$BIC
+```
+```{r acf, echo=FALSE}
+#question 6
+#cal acf pacf
+th = c(m2$fit$coef[1:3])
+phi = c(m2$fit$coef[4:10],rep(0, 4), m2$fit$coef[11],rep(0, 11),m2$fit$coef[12])
+T = 60
+corrs = ARMAacf(ar = th,ma = phi, lag.max = T)
+par.corrs = ARMAacf(ar = th,ma = phi, lag.max = T, pacf = T)
+all.plot = function(x,corr,pcorr){
+  acf(x,lag.max = T)
+  points(corr[1:60],col='red',type='h')
+  pacf(x,lag.max = T)
+  points(pcorr[1:60],col='red',type='h')
+}
+all.plot(as.vector(ddpop.ts),corrs,par.corrs)
+
+
+#Forecast
+modelf1 = sarima.for(ddpop.ts,n.ahead = 12,p=3,d=0,q=7,P=0,D=0,Q=2,S=12)
+
+```
+
+
+```{r pressure, echo=FALSE}
+sm.par=c(0.5,1,1,1,1,1,1,1,1,1,1,1,0.5)
+mt = filter(dpop, sm.par/12)
+sm.res = dpop - mt
+plot(mt)
+lines(dpop,col = 'red')
+plot.ts(sm.res[7:350])
+
+acf2(sm.res[7:350])
+#auto.arima(sm.res)
+model1 = sarima(sm.res[7:350],p=4,d=0,q=1,S=12,P=1,D=1,Q=2)
+```
+
+```{r 1c}
+
+library(astsa)
+acf2(ddpop,max.lag = 80)
+
+#library(forecast)
+#auto.arima(ddpop)
+
+for( pp in 1:11 ){
+  for (qq in 1:11)
+  model1 = sarima(ddpop,p=pp,d=0,q=qq, P = 1,D = 0, Q=1,no.constant=TRUE)
+}
+
+#model2 = sarima(ddpop,p=10,d=0,q=3,S=12,P=1,D=0,Q=2,no.constant=TRUE)
+model2 = arima(ddpop, order = c(2, 0, 0),seasonal = list(order = c(2,0,0)))
+plot.ts(model2$residuals)
+acf2(model2$residuals)
+```
+
+
+## 1.Exploratory data analysis
+### 1a
+```{r cars}
+rm(list = ls())
+popdata = read.csv("/Users/li/Desktop/POPTHM/GOLDAMGBD228NLBM.csv",header = T)
+
+pop = popdata$GOLDAMGBD228NLBM
+date = as.Date(popdata$DATE,format = "%Y-%m-%d")
+library(xts)
+pop.ts = ts(pop,start = c(1983,3),frequency = 12)
+pop.xts <- xts(pop, order.by=date)
+plot.ts(pop.ts,type = "l", xlab ="Monthly") 
+
+```
+
+```{r pressure, echo=FALSE}
+l1 = log(pop.ts)
+dpop = diff(l1)
+plot.ts(dpop,type = "l", xlab = "Monthly", ylab = "1th difference")
+
+```
+
+```{r 1c}
+
+library(astsa)
+acf2(dpop,max.lag = 60)
+auto.arima(dpop)
+
+```
