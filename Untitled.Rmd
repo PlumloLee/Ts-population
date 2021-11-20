@@ -1,7 +1,5 @@
 ---
 title: "Project Stat 153"
-author: "Ziyuan Li"
-date: "11/15/2021"
 output: html_document
 ---
 
@@ -12,7 +10,10 @@ library(forecast)
 library(xts)
 library(TSA)
 library(dplyr)
+```
 
+
+```{r}
 pgram = function(x){
   m = floor(length(x)/2)
   pgram = abs(fft(x)[2:(m+1)])^2/length(x)
@@ -150,36 +151,137 @@ modelf1 = sarima.for(ddpop.ts,n.ahead = 12,p=3,d=0,q=7,P=0,D=0,Q=2,S=12)
 
 ```
 # Model 2
-```{r}
-library(lubridate)
 
-popdata$date = date
-popdata$pop = popdata$POPTHM
-popdata$month = 
-popdata$dpop = c(0, dpop)
-popdata = popdata[c("date", "month", "pop", "dpop")]
+population growth
+```{r cars}
+dpop = diff(pop.ts)
+plot.ts(dpop)
 ```
+
+
+First remove the decreasing trend with linear parametric
 ```{r}
-month = month(popdata$date)[2:length(popdata$date)]
 t = 1:length(dpop)
-model = lm(dpop ~ poly(t, degree = 5)*month)
-```
-```{r}
-plot(t, model$fitted.values, type = "l")
-lines(t, dpop, col = "blue")
+model = lm(dpop ~ poly(t, degree = 2))
+plot(t, model$fitted.values, type = "l", col = "blue")
+lines(t, dpop)
 plot(t, model$residuals, type = "l")
-
+resid = model$residuals
 ```
 
 ```{r}
-d9d12 = diff(diff(dpop, 12), 9)
-plot.ts(d9d12)
+pgram(resid[1:324])
 ```
-```{r}
-acf2(d9d12)
-```
-```{r}
 
+total number / index = period
+so 324 / 27 = 12 --> period
+and 324 / 3 = 108
+
+
+```{r}
+t = 1:length(dpop)
+df = data.frame(t = t, t2 = t^2, v1 = cos(2*pi*t/108), v2 = sin(2*pi*t/108), v3 = cos(2*pi*t/12), v4 =  sin(2*pi*t/12))
+m2 = lm(dpop ~ t+t2+v1+v2+v3+v4, df)
+
+plot(t, dpop, type = "l", col = "black")
+lines(t, m2$fitted.values, col = "blue")
+plot(t, m2$residuals, type = "l")
+resid = m2$residuals
+```
+
+```{r}
+acf2(resid)
+```
+fit linear trend (up and down - and there might be a bump when it switches) - this makes the mean more constant overtime.
+
+```{r}
+d1 = diff(resid)
+plot.ts(d1)
+```
+
+```{r}
+acf2(d1)
+```
+
+```{r}
+m2a = sarima(resid,p=10,d=1,q=2,P=1,D=0,Q=1,S=12)
+```
+
+```{r}
+m2b = sarima(resid,p=9,d=1,q=2,P=0,D=0,Q=2,S=12)
+```
+
+## Comparing AIC, BIC, AICc
+```{r}
+m2a$AIC
+m2a$BIC
+m2a$AICc
+```
+
+```{r}
+m2b$AIC
+m2b$BIC
+m2b$AICc
+```
+
+
+
+
+```{r}
+########################
+### Cross Validation ###
+########################
+
+# cross validate 2017, 2018, 2019
+
+sse = matrix(NA, nrow=3,ncol=2) # forecasting out 3 different times, with 2 models
+for(i in 1:3){
+  
+  ## Split train/test
+  # if using a time series object
+  # train = window(l1,start=2004,end=2013+i-.0001)
+  # test = window(l1, start=2013+i, end=2013+i+.999)
+  # if using a standard vector
+  split.point = 309+12*(i-1) # last point of train
+  train = as.vector(dpop)[1:split.point]
+  test = as.vector(dpop)[(split.point+1):(split.point+12)]
+  
+  ## Fit model2
+  t = 1:length(train)
+  df_train = data.frame(t = t, t2 = t^2, v1 = cos(2*pi*t/108), v2 = sin(2*pi*t/108), v3 = cos(2*pi*t/12), v4 =  sin(2*pi*t/12))
+  model2 = lm(dpop ~ t+t2+v1+v2+v3+v4, df)
+  Xt = model2$residuals
+  
+  # Predict Model2
+  t_pred = (length(train)+1):(length(train)+12)
+  new_df = data.frame(t = t_pred, t2 = t_pred^2, v1 = cos(2*pi*t_pred/108), v2 = sin(2*pi*t_pred/108), v3 = cos(2*pi*t_pred/12), v4 =  sin(2*pi*t_pred/12))
+  model2_pred = predict(model2, new_df)
+
+  # ## Fit SARIMA
+  model2a = sarima.for(Xt,n.ahead = 12,p=10,d=1,q=2,P=1,D=0,Q=1,S=12)
+  #lines((train.test.split.point+1):(train.test.split.point+12),test)
+  model2b = sarima.for(Xt,n.ahead = 12,p=9,d=1,q=2,P=0,D=0,Q=2,S=12)
+  #lines((train.test.split.point+1):(train.test.split.point+12),test)
+  # 
+  # ## Test
+  model2a_pred = model2_pred + model2a$pred
+  sse[i,1] = sum((test - model2a_pred)^2)
+  plot(c(200:split.point, t_pred), c(train[200:split.point], test), type = "l", col = "black")
+  lines(t_pred, model2a_pred, col = "blue")
+  
+  model2b_pred = model2_pred + model2b$pred
+  sse[i,2] = sum((test - model2b_pred)^2)
+  plot(c(200:split.point, t_pred), c(train[200:split.point], test), type = "l", col = "black")
+  lines(t_pred, model2b_pred, col = "blue")
+
+  
+}
+```
+
+
+```{r}
+CV_RMSE = sqrt(apply(sse,2,sum))
+CV_RMSE
 ```
 
 
